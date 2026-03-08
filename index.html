@@ -1,0 +1,1701 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>基金估值</title>
+  <style>
+    :root {
+      --bg: #f5f5f7;
+      --card: #fff;
+      --card-soft: #f9fafb;
+      --text: #1d1d1f;
+      --text2: #6e6e73;
+      --border: #e8e8ed;
+      --red: #ff3b30;
+      --green: #34c759;
+      --link: #0066cc;
+      --focus: #74a8e8;
+      --focus-ring: rgba(116, 168, 232, 0.22);
+      --glass-top: rgba(255, 255, 255, 0.86);
+      --glass-bottom: rgba(255, 255, 255, 0.62);
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(0,0,0,0.25) transparent;
+    }
+    body.dark {
+      scrollbar-color: rgba(255,255,255,0.25) transparent;
+    }
+    *::-webkit-scrollbar { width: 8px; height: 8px; }
+    *::-webkit-scrollbar-track { background: transparent; }
+    *::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.25); border-radius: 4px; }
+    *::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.35); }
+    body.dark *::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); }
+    body.dark *::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.35); }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 8px 12px 12px;
+      min-height: 100vh;
+      font-size: 13px;
+      overflow: hidden;
+    }
+    body.dark {
+      --bg: #111317;
+      --card: #171b23;
+      --card-soft: #1d2430;
+      --text: #e6edf3;
+      --text2: #9ba7b7;
+      --border: #2b3544;
+      --link: #7db2ff;
+      --focus: #8bbcff;
+      --focus-ring: rgba(139, 188, 255, 0.22);
+      --glass-top: rgba(23, 27, 35, 0.88);
+      --glass-bottom: rgba(23, 27, 35, 0.6);
+    }
+    .main-wrapper {
+      position: fixed;
+      top: 58px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      overflow: hidden;
+      transition: padding-right 0.25s ease;
+    }
+    body.drawer-open .main-wrapper {
+      padding-right: 300px;
+    }
+    .main-content-wrap {
+      flex: 1;
+      max-width: 700px;
+      min-width: 0;
+      height: 100%;
+      position: relative;
+      display: flex;
+      justify-content: center;
+    }
+    .scroll-area {
+      flex: 1;
+      min-width: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-gutter: stable;
+    }
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 16px 12px 32px;
+      width: 100%;
+    }
+    .ai-drawer {
+      position: fixed;
+      top: 74px;
+      right: 0;
+      bottom: 0;
+      width: 0;
+      overflow: hidden;
+      transition: width 0.25s ease;
+      z-index: 500;
+      background: var(--card);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+    body.drawer-open .ai-drawer {
+      width: 300px;
+      border-top-left-radius: 16px;
+      border-bottom-left-radius: 16px;
+      box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08), 0 2px 12px rgba(0, 0, 0, 0.04);
+    }
+    body.dark.drawer-open .ai-drawer {
+      box-shadow: -4px 0 20px rgba(0, 0, 0, 0.35), 0 2px 12px rgba(0, 0, 0, 0.15);
+    }
+    body.drawer-open .ai-bubble {
+      right: calc(310px + env(safe-area-inset-right));
+    }
+    body.drawer-open .page-head {
+      transform: translateX(calc(-50% - 150px));
+    }
+    .page-head {
+      position: fixed;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(700px, calc(100vw - 24px));
+      padding: 8px 12px;
+      z-index: 60;
+      transition: transform 0.25s ease;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-sizing: border-box;
+      background: transparent;
+      border: none;
+      box-shadow: none;
+    }
+    .page-title {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: calc(100% - 140px);
+    }
+    .global-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      backdrop-filter: blur(8px);
+      width: max-content;
+      padding: 4px;
+      border-radius: 999px;
+      border: 1px solid rgba(127, 127, 127, 0.16);
+      background: linear-gradient(180deg, var(--glass-top) 0%, var(--glass-bottom) 62%, rgba(127,127,127,0.06) 100%);
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255,255,255,0.38);
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .hero-block {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 13px 14px;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.03);
+    }
+    .hero-label { color: var(--text2); font-size: 10px; margin-bottom: 7px; letter-spacing: .02em; }
+    .hero-value { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; }
+    .hero-sub { margin-top: 6px; font-size: 12px; color: var(--text2); }
+    .hero-value.positive { color: var(--red); }
+    .hero-value.negative { color: var(--green); }
+    @media (max-width: 700px) {
+      .hero { grid-template-columns: 1fr; }
+      .hero-value { font-size: 26px; }
+    }
+    .ai-bubble {
+      position: fixed;
+      right: calc(10px + env(safe-area-inset-right));
+      top: 42%;
+      transition: right 0.25s ease;
+      transform: none;
+      z-index: 1200;
+      width: 42px;
+      height: 42px;
+      cursor: grab;
+      user-select: none;
+      touch-action: none;
+    }
+    .ai-fab {
+      border: 1px solid var(--border);
+      background: radial-gradient(circle at 28% 20%, #7dc1ff 0%, #4d88ff 50%, #295fd8 100%);
+      color: #fff;
+      border-radius: 999px;
+      width: 42px;
+      height: 42px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14), inset 0 1px 0 rgba(255,255,255,0.35);
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .ai-fab::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(145deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0) 48%);
+      pointer-events: none;
+    }
+    .ai-fab:hover { filter: brightness(1.02); }
+    .ai-fab-tip {
+      position: absolute;
+      right: 48px;
+      top: 50%;
+      transform: translateY(-50%) translateX(4px);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 7px 10px;
+      color: var(--text2);
+      font-size: 11px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .18s ease, transform .18s ease;
+    }
+    .ai-bubble:hover .ai-fab-tip { opacity: 1; transform: translateY(-50%) translateX(0); }
+    .ai-head { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    .ai-title { font-size: 12px; color: var(--text2); }
+    .ai-actions { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; align-items: center; }
+    .ai-btn {
+      border: 1px solid var(--border);
+      background: var(--card-soft);
+      color: var(--text);
+      border-radius: 7px;
+      padding: 5px 7px;
+      font-size: 11px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .ai-btn:hover { filter: brightness(0.98); }
+    .ai-btn.primary {
+      background: var(--link);
+      color: #fff;
+      border-color: var(--link);
+    }
+    .ai-btn.primary:hover { filter: brightness(1.05); }
+    .ai-btn.primary:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus-ring); }
+    .ai-close {
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text2);
+      border-radius: 7px;
+      padding: 5px 7px;
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .ai-close:hover { color: var(--text); }
+    .ai-scroll {
+      padding: 12px 14px 20px;
+      overflow: auto;
+    }
+    .ai-status { font-size: 11px; color: var(--text2); margin-bottom: 8px; }
+    .ai-output {
+      width: 100%;
+      min-height: 180px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 12px;
+      line-height: 1.6;
+      background: var(--card-soft);
+      color: var(--text);
+      overflow-wrap: anywhere;
+    }
+    .ai-output h1, .ai-output h2, .ai-output h3 { margin: 10px 0 6px; font-size: 13px; }
+    .ai-output strong, .ai-output b { font-weight: 600; }
+    .ai-output ul, .ai-output ol { margin: 6px 0 6px 16px; padding: 0; }
+    .ai-output p { margin: 6px 0; }
+    .ai-output code { background: rgba(125,125,125,0.18); padding: 1px 4px; border-radius: 4px; }
+    body.dark .ai-output code { background: rgba(255,255,255,0.12); }
+    .ai-settings { margin-top: 10px; border-top: 1px dashed var(--border); padding-top: 8px; }
+    .ai-settings summary { cursor: pointer; color: var(--text2); font-size: 11px; }
+    .ai-form {
+      margin-top: 8px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 10px;
+    }
+    .ai-form label { font-size: 10px; color: var(--text2); display: block; margin-bottom: 2px; }
+    .ai-form input {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--card);
+      color: var(--text);
+      font-size: 12px;
+    }
+    .ai-form .full { grid-column: span 2; }
+    .add-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 11px 14px 12px;
+      margin-bottom: 14px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+    }
+    .section-title {
+      font-size: 10px;
+      color: var(--text2);
+      margin-bottom: 9px;
+      letter-spacing: .03em;
+    }
+    .add-form {
+      display: grid;
+      grid-template-columns: minmax(130px, 1.15fr) minmax(116px, 1fr) minmax(116px, 1fr) auto;
+      gap: 8px 10px;
+      align-items: end;
+      width: 100%;
+    }
+    @media (max-width: 720px) {
+      .add-form {
+        grid-template-columns: 1fr 1fr;
+      }
+      .add-form .field.actions {
+        grid-column: span 2;
+        justify-self: end;
+      }
+    }
+    .add-card .field { min-width: 0; }
+    .add-card label { display: block; font-size: 10px; color: var(--text2); margin-bottom: 3px; }
+    .add-card input {
+      width: 100%;
+      padding: 7px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--text);
+      background: var(--card);
+    }
+    .add-card input:focus {
+      outline: none;
+      border-color: var(--focus);
+      box-shadow: 0 0 0 3px var(--focus-ring);
+    }
+    .add-card .btn-add {
+      height: 32px;
+      padding: 0 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      background: var(--link);
+      color: #fff;
+    }
+    .add-card .btn-add:hover { opacity: 0.88; }
+    .add-card .btn-add:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
+    .add-card .btn-add:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .add-card .btn-cancel { background: transparent; color: var(--text2); margin-left: 2px; border: 1px solid var(--border); }
+    .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 0 2px; }
+    .toolbar .meta { font-size: 11px; color: var(--text2); }
+    .toolbar .btn-text { background: none; border: none; color: var(--link); font-size: 13px; cursor: pointer; padding: 2px 0; }
+    .toolbar .btn-text:hover { text-decoration: underline; }
+    .toolbar-actions { display: inline-flex; align-items: center; gap: 10px; }
+    .theme-btn {
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text2);
+      border-radius: 999px;
+      font-size: 11px;
+      height: 34px;
+      padding: 0 11px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .theme-btn:hover { color: var(--text); background: var(--card-soft); }
+    .theme-btn:focus-visible, .refresh-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus-ring); }
+    .refresh-btn {
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text2);
+      border-radius: 999px;
+      font-size: 11px;
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .refresh-btn:hover { color: var(--text); background: var(--card-soft); }
+    .refresh-icon {
+      display: inline-flex;
+      line-height: 1;
+      font-size: 17px;
+      font-weight: 300;
+      transform-origin: center;
+    }
+    .refresh-btn.spinning .refresh-icon { animation: spin-refresh .65s ease; }
+    @keyframes spin-refresh { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .fund-list-head {
+      display: grid;
+      grid-template-columns: minmax(150px, 1.45fr) minmax(120px, 1.05fr) minmax(120px, 1.05fr) minmax(132px, 1.2fr) 48px;
+      gap: 12px;
+      padding: 6px 12px 8px;
+      color: var(--text2);
+      font-size: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 6;
+      background: var(--bg);
+      border-bottom: 1px solid color-mix(in oklab, var(--border) 72%, transparent);
+      margin-bottom: 6px;
+    }
+    .fund-list-head span:nth-child(n+2) { text-align: right; }
+    .sort-btn {
+      border: none;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .sort-btn:hover { color: var(--text); }
+    .sort-btn:focus-visible { outline: none; border-radius: 4px; box-shadow: 0 0 0 2px var(--focus-ring); }
+    .sort-btn.active { color: var(--link); font-weight: 600; }
+    .sort-indicator { color: var(--text2); font-size: 11px; width: 10px; text-align: center; }
+    .sort-btn.active .sort-indicator { color: var(--link); }
+    .fund-list { list-style: none; padding: 0; margin: 0; }
+    .fund-item {
+      transition: background-color 0.15s ease;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+    }
+    .fund-item:last-child { margin-bottom: 0; }
+    .fund-row-wrap { cursor: pointer; transition: background 0.15s; }
+    .fund-row-wrap:hover { background: var(--card-soft); }
+    .fund-row-grid {
+      display: grid;
+      grid-template-columns: minmax(150px, 1.45fr) minmax(120px, 1.05fr) minmax(120px, 1.05fr) minmax(132px, 1.2fr) 48px;
+      gap: 12px;
+      padding: 11px 12px;
+      align-items: center;
+    }
+    .fund-main-name { min-width: 0; }
+    .fund-main-name .fund-name { font-weight: 400; display: block; line-height: 1.2; }
+    .fund-main-name .fund-code { color: var(--text2); font-size: 11px; margin-top: 2px; display: block; }
+    .fund-metric { text-align: right; min-width: 0; }
+    .fund-metric .main { font-weight: 600; line-height: 1.2; font-size: 13px; }
+    .fund-metric .sub { margin-top: 2px; color: var(--text2); font-size: 11px; line-height: 1.1; }
+    .fund-actions { display: flex; align-items: center; gap: 4px; white-space: nowrap; justify-content: flex-end; }
+    .fund-actions .fund-more-btn {
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text2);
+      border-radius: 6px;
+      font-size: 18px;
+      line-height: 1;
+      width: 28px;
+      height: 28px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .fund-actions .fund-more-btn:hover { background: var(--card-soft); border-color: var(--border); color: var(--text); }
+    .cell-date { display: block; font-size: 11px; color: var(--text2); margin-top: 2px; font-weight: 400; }
+    .action-menu {
+      position: fixed;
+      display: none;
+      min-width: 96px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+      padding: 4px 0;
+      z-index: 9999;
+    }
+    .action-menu.open { display: block; }
+    .action-menu button {
+      width: 100%;
+      border: none;
+      background: transparent;
+      padding: 9px 12px;
+      text-align: left;
+      font-size: 13px;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .action-menu button:hover { background: var(--card-soft); }
+    .action-menu button.btn-primary { color: var(--link); font-weight: 500; }
+    .action-menu button.btn-primary:hover { background: rgba(0, 102, 204, 0.08); }
+    body.dark .action-menu button.btn-primary:hover { background: rgba(125, 178, 255, 0.12); }
+    .action-menu .btn-del { color: var(--red); }
+    .fund-detail {
+      display: none;
+      padding: 10px 14px 12px;
+      border-top: 1px solid var(--border);
+      background: var(--card-soft);
+    }
+    .fund-item.expanded .fund-detail { display: block; }
+    .fund-detail table { width: 100%; max-width: 320px; border-collapse: collapse; font-size: 12px; }
+    .fund-detail table th { text-align: left; font-weight: 400; color: var(--text2); padding: 4px 12px 4px 0; width: 40%; }
+    .fund-detail table td { text-align: right; font-weight: 500; padding: 4px 0; }
+    .fund-detail-note { margin-top: 10px; font-size: 11px; color: var(--text2); }
+    .positive { color: var(--red); }
+    .negative { color: var(--green); }
+    .loading { color: var(--text2); font-style: italic; }
+    .error { color: var(--red); font-size: 11px; }
+    .empty { text-align: center; color: var(--text2); padding: 36px 12px; font-size: 13px; }
+    #heroSection { display: none; }
+  </style>
+</head>
+<body>
+  <header class="page-head">
+    <div class="page-title">实时基金估值查看与智能决策系统</div>
+    <div class="global-actions">
+      <button type="button" class="refresh-btn" id="refreshBtn" aria-label="刷新">
+        <span class="refresh-icon" aria-hidden="true">↻</span>
+      </button>
+      <button type="button" class="theme-btn" id="themeToggleBtn">◐ 暗黑</button>
+    </div>
+  </header>
+  <div class="main-wrapper" id="mainWrapper">
+    <div class="main-content-wrap">
+      <main class="scroll-area">
+        <div class="container">
+    <section class="hero" id="heroSection">
+      <div class="hero-block">
+        <div class="hero-label">账户资产</div>
+        <div class="hero-value" id="heroAsset">--</div>
+      </div>
+      <div class="hero-block">
+        <div class="hero-label" id="heroTodayLabel">-- 当日收益</div>
+        <div class="hero-value" id="heroTodayProfit">--</div>
+        <div class="hero-sub" id="heroTodayRate">--</div>
+      </div>
+      <div class="hero-block">
+        <div class="hero-label">累计收益</div>
+        <div class="hero-value" id="heroProfit">--</div>
+        <div class="hero-sub" id="heroRate">--</div>
+      </div>
+    </section>
+    <div class="add-card">
+      <div class="section-title">持仓录入</div>
+      <form id="addForm" class="add-form">
+        <input type="hidden" id="editId" value="" />
+        <div class="field"><label>基金代码</label><input type="text" id="fundCode" placeholder="000001" maxlength="6" /></div>
+        <div class="field"><label>成本价</label><input type="number" id="costPrice" placeholder="1.0000" step="any" min="0" /></div>
+        <div class="field"><label>持有份额</label><input type="number" id="shares" placeholder="份" step="any" min="0.000001" /></div>
+        <div class="field actions">
+          <button type="submit" class="btn-add" id="btnSubmit">添加</button>
+          <button type="button" class="btn-add btn-cancel" id="btnCancelEdit" style="display:none;">取消</button>
+        </div>
+      </form>
+    </div>
+    <section>
+      <div class="section-title" style="padding:0 2px;">持仓概览</div>
+      <div class="toolbar">
+        <span class="meta" id="tradingBadge">--</span>
+        <div class="toolbar-actions"></div>
+      </div>
+      <div class="fund-list-head">
+        <span>基金</span>
+        <span><button type="button" class="sort-btn" id="sortTodayBtn">当日收益<span class="sort-indicator" id="sortTodayIndicator">↕</span></button></span>
+        <span>当日估值/净值</span>
+        <span><button type="button" class="sort-btn" id="sortCumBtn">持有收益<span class="sort-indicator" id="sortCumIndicator">↕</span></button></span>
+        <span>操作</span>
+      </div>
+      <ul class="fund-list" id="fundList"></ul>
+      <p id="emptyTip" class="empty">添加基金代码、成本价与持有份额即可查看估值与收益</p>
+    </section>
+    <p class="fund-detail-note" style="margin-top:16px;padding:0 4px;">估值数据来源：天天基金网（fundgz.1234567.com.cn），仅供参考，实际净值以基金公司公布为准。</p>
+        </div>
+      </main>
+      <div class="ai-bubble" id="aiBubble">
+        <button type="button" class="ai-fab" id="aiFabBtn" aria-label="打开AI助手">AI</button>
+        <div class="ai-fab-tip">智能盯盘决策</div>
+      </div>
+    </div>
+  </div>
+  <aside class="ai-drawer" id="aiDrawer">
+    <div class="ai-head">
+      <span class="ai-title">AI 市场分析（自动时段触发）</span>
+      <div class="ai-actions">
+        <button type="button" class="ai-btn primary" id="aiAnalyzeBtn">立即分析</button>
+        <button type="button" class="ai-btn" id="aiAutoBtn">自动: 开</button>
+        <button type="button" class="ai-close" id="aiCloseBtn">关闭</button>
+      </div>
+    </div>
+    <div class="ai-scroll">
+      <div class="ai-status" id="aiStatus">待分析：收盘前30分钟会自动分析，早盘结束后会自动总结。</div>
+      <div id="aiOutput" class="ai-output">这里会显示 AI 对当前市场与持仓的分析建议。</div>
+      <details class="ai-settings">
+        <summary>AI 配置（OpenAI 兼容接口）</summary>
+        <div class="ai-form">
+          <div>
+            <label>模型名</label>
+            <input id="aiModelInput" placeholder="qwen-plus" />
+          </div>
+          <div>
+            <label>接口地址</label>
+            <input id="aiEndpointInput" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions" />
+          </div>
+          <div class="full">
+            <label>API Key（仅保存在本地浏览器）</label>
+            <input id="aiApiKeyInput" type="password" placeholder="sk-..." />
+          </div>
+          <div class="full">
+            <button type="button" class="ai-btn primary" id="aiSaveConfigBtn">保存 AI 配置</button>
+          </div>
+        </div>
+      </details>
+    </div>
+  </aside>
+  <div id="actionMenu" class="action-menu">
+    <button type="button" id="menuEditBtn" class="btn-primary">编辑</button>
+    <button type="button" id="menuDeleteBtn" class="btn-del">删除</button>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+  <script>
+    (function () {
+      const STORAGE_KEY = "fund_list";
+      const VALUATION_URL = "https://fundgz.1234567.com.cn/js/";
+      const PING_DATA_URL = "https://fund.eastmoney.com/pingzhongdata/";
+      const THEME_KEY = "fund_theme";
+      const AI_CONFIG_KEY = "ai_config_v1";
+      const AI_AUTO_KEY = "ai_auto_enabled";
+      const AI_TRIGGER_KEY = "ai_auto_trigger_cache_v1";
+      const NAV_CACHE = {};
+      const AI_BUBBLE_KEY = "ai_bubble_pos_v1";
+      const INDEX_CACHE_KEY = "index_snapshot_v1";
+      const INDEX_SYMBOLS = [];
+      var activeActionFundId = "";
+      var sortState = { field: "", order: "" };
+      var latestIndices = [];
+      var latestMarketSnapshot = null;
+      var aiAutoEnabled = true;
+      var aiRawOutput = "";
+      var aiRunning = false;
+      function applyTheme(mode) {
+        var dark = mode === "dark";
+        document.body.classList.toggle("dark", dark);
+        var btn = document.getElementById("themeToggleBtn");
+        if (btn) btn.textContent = dark ? "☀︎ 浅色" : "◐ 暗黑";
+      }
+      function initTheme() {
+        var stored = localStorage.getItem(THEME_KEY);
+        if (stored === "dark" || stored === "light") {
+          applyTheme(stored);
+          return;
+        }
+        var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        applyTheme(prefersDark ? "dark" : "light");
+      }
+      function toggleTheme() {
+        var next = document.body.classList.contains("dark") ? "light" : "dark";
+        localStorage.setItem(THEME_KEY, next);
+        applyTheme(next);
+      }
+      function isTradingDay() { const d = new Date(); return d.getDay() >= 1 && d.getDay() <= 5; }
+      function isMarketOpen() {
+        if (!isTradingDay()) return false;
+        const d = new Date();
+        const h = d.getHours(), m = d.getMinutes(), t = h * 60 + m;
+        if (t >= 9*60+30 && t < 11*60+30) return true;
+        if (t >= 13*60+0 && t < 15*60+0) return true;
+        return false;
+      }
+      function isNavDateToday(jzrq) {
+        if (!jzrq || typeof jzrq !== "string") return false;
+        const d = new Date();
+        const today = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+        return jzrq.trim().slice(0,10) === today;
+      }
+      function formatDateDisplay(ymdStr) {
+        if (!ymdStr || typeof ymdStr !== "string") return "";
+        var s = ymdStr.trim().slice(0, 10);
+        if (s.length < 10) return s;
+        var parts = s.split("-");
+        if (parts.length !== 3) return s;
+        return parts[1] + "月" + parseInt(parts[2], 10) + "日";
+      }
+      function compareYmd(a, b) {
+        if (!a && !b) return 0;
+        if (!a) return -1;
+        if (!b) return 1;
+        return a.slice(0, 10).localeCompare(b.slice(0, 10));
+      }
+      function toNum(v) {
+        if (v == null) return null;
+        var n = Number(String(v).replace(/[%\s]/g, ""));
+        return Number.isNaN(n) ? null : n;
+      }
+      function getIndexCache() {
+        try {
+          var raw = localStorage.getItem(INDEX_CACHE_KEY);
+          if (!raw) return null;
+          var parsed = JSON.parse(raw);
+          return Array.isArray(parsed) ? parsed : null;
+        } catch (_) {
+          return null;
+        }
+      }
+      function setIndexCache(list) {
+        try { localStorage.setItem(INDEX_CACHE_KEY, JSON.stringify(list || [])); } catch (_) {}
+      }
+      function normalizeIndexWithPrev(item, parsed) {
+        if (!parsed || parsed.price == null) return null;
+        var isCn = item.market === "CN";
+        var tradingNow = isCn && isTradingDay() && isMarketOpen();
+        var price = parsed.price;
+        var prevClose = parsed.prevClose;
+        if (prevClose == null && parsed.change != null) prevClose = price - parsed.change;
+        var change = prevClose != null ? (price - prevClose) : parsed.change;
+        var pct = prevClose != null && prevClose !== 0 ? (change / prevClose) * 100 : parsed.pct;
+        return {
+          key: item.key,
+          name: item.name,
+          price: price,
+          change: change,
+          pct: pct,
+          isRealtime: tradingNow || !isCn
+        };
+      }
+      function parseSinaIndexRaw(item, raw) {
+        if (!raw || typeof raw !== "string") return null;
+        var arr = raw.split(",");
+        if (!arr.length) return null;
+        if (item.sinaSymbol.indexOf("s_") === 0) {
+          return normalizeIndexWithPrev(item, {
+            price: toNum(arr[1]),
+            change: toNum(arr[2]),
+            pct: toNum(arr[3]),
+            prevClose: null
+          });
+        }
+        if (item.sinaSymbol.indexOf("rt_hk") === 0) {
+          return normalizeIndexWithPrev(item, {
+            price: toNum(arr[6]) != null ? toNum(arr[6]) : toNum(arr[1]),
+            change: toNum(arr[7]) != null ? toNum(arr[7]) : toNum(arr[2]),
+            pct: toNum(arr[8]) != null ? toNum(arr[8]) : toNum(arr[3]),
+            prevClose: toNum(arr[3])
+          });
+        }
+        if (item.sinaSymbol.indexOf("gb_") === 0) {
+          return normalizeIndexWithPrev(item, {
+            price: toNum(arr[1]),
+            change: toNum(arr[2]),
+            pct: toNum(arr[3]),
+            prevClose: null
+          });
+        }
+        return null;
+      }
+      function renderMarkdownToHtml(text) {
+        var raw = text || "";
+        if (window.marked && window.DOMPurify) {
+          var html = window.marked.parse(raw);
+          return window.DOMPurify.sanitize(html);
+        }
+        return escapeHtml(raw).replace(/\n/g, "<br>");
+      }
+      function getFundList() {
+        try {
+          var raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return [];
+          var list = JSON.parse(raw);
+          return Array.isArray(list) ? list.map(normalizeItem) : [];
+        } catch { return []; }
+      }
+      function normalizeItem(f) {
+        const shares = Number(f.shares ?? 0);
+        const costTotal = f.cost != null ? Number(f.cost) : null;
+        const costPrice = (f.costPrice != null && f.costPrice > 0) ? Number(f.costPrice) : (costTotal != null && shares > 0 ? costTotal / shares : 0);
+        return {
+          id: f.id || "f_"+Date.now()+"_"+Math.random().toString(36).slice(2,9),
+          fundCode: String(f.fundCode||"").replace(/\D/g,"").padStart(6,"0").slice(-6),
+          costPrice, shares, fundName: f.fundName || "",
+        };
+      }
+      function setFundList(list) { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); }
+      function addFund(fundCode, costPrice, shares) {
+        const code = String(fundCode).trim().replace(/\D/g,"").padStart(6,"0").slice(-6);
+        if (code.length !== 6) return false;
+        const list = getFundList();
+        list.push({ id: "f_"+Date.now()+"_"+Math.random().toString(36).slice(2,9), fundCode: code, costPrice: Number(costPrice), shares: Number(shares), fundName: "" });
+        setFundList(list);
+        return true;
+      }
+      function updateFund(id, fundCode, costPrice, shares) {
+        const code = String(fundCode).trim().replace(/\D/g,"").padStart(6,"0").slice(-6);
+        if (code.length !== 6) return false;
+        const list = getFundList();
+        const i = list.findIndex(function(f){ return f.id === id; });
+        if (i < 0) return false;
+        list[i] = Object.assign({}, list[i], { fundCode: code, costPrice: Number(costPrice), shares: Number(shares) });
+        setFundList(list);
+        return true;
+      }
+      function removeFund(id) { setFundList(getFundList().filter(function(f){ return f.id !== id; })); }
+      function fetchValuation(fundCode) {
+        return new Promise(function(resolve) {
+          var script = document.createElement("script");
+          script.src = VALUATION_URL + fundCode + ".js?t=" + Date.now();
+          script.async = true;
+          window.jsonpgz = function(data) {
+            try { resolve(data && data.fundcode ? data : null); } finally { delete window.jsonpgz; script.remove(); }
+          };
+          script.onerror = function() { resolve(null); delete window.jsonpgz; script.remove(); };
+          document.body.appendChild(script);
+        });
+      }
+      function tsToYmd(ts) {
+        var d = new Date(Number(ts));
+        if (Number.isNaN(d.getTime())) return "";
+        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+      }
+      function parseLatestTwoNav(trend) {
+        if (!Array.isArray(trend) || trend.length === 0) return null;
+        var rows = trend
+          .filter(function(p){ return p && p.y != null && !Number.isNaN(Number(p.y)); })
+          .map(function(p){ return { date: tsToYmd(p.x), value: Number(p.y) }; })
+          .filter(function(p){ return p.date && p.value > 0; });
+        if (!rows.length) return null;
+        var latest = rows[rows.length - 1];
+        var previous = rows.length > 1 ? rows[rows.length - 2] : null;
+        return { latest: latest, previous: previous };
+      }
+      function clearPingVars() {
+        ["Data_netWorthTrend", "Data_ACWorthTrend", "Data_grandTotal", "Data_rateInSimilarType", "Data_rateInSimilarPersent", "fS_name", "fS_code"].forEach(function(k) {
+          try { delete window[k]; } catch (_) {}
+        });
+      }
+      function fetchLatestTwoNav(fundCode) {
+        var now = Date.now();
+        var cache = NAV_CACHE[fundCode];
+        if (cache && now - cache.at < 5 * 60 * 1000) return Promise.resolve(cache.data);
+        return new Promise(function(resolve) {
+          var script = document.createElement("script");
+          script.src = PING_DATA_URL + fundCode + ".js?v=" + now;
+          script.async = true;
+          script.onload = function() {
+            try {
+              var parsed = parseLatestTwoNav(window.Data_netWorthTrend);
+              NAV_CACHE[fundCode] = { at: Date.now(), data: parsed };
+              resolve(parsed);
+            } catch (_) {
+              resolve(null);
+            } finally {
+              clearPingVars();
+              script.remove();
+            }
+          };
+          script.onerror = function() {
+            clearPingVars();
+            script.remove();
+            resolve(null);
+          };
+          document.body.appendChild(script);
+        });
+      }
+      function parseIndexPayload(item, payload) {
+        var d = payload && payload.data ? payload.data : null;
+        if (!d) return null;
+        var priceRaw = Number(d.f43);
+        var changeRaw = Number(d.f169);
+        var pctRaw = Number(d.f170);
+        if (Number.isNaN(priceRaw)) return null;
+        return normalizeIndexWithPrev(item, {
+          price: priceRaw / 100,
+          change: Number.isNaN(changeRaw) ? null : (changeRaw / 100),
+          pct: Number.isNaN(pctRaw) ? null : (pctRaw / 100),
+          prevClose: null
+        });
+      }
+      function fetchJsonp(url, timeoutMs) {
+        return new Promise(function(resolve, reject) {
+          var cbName = "__idx_cb_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
+          var script = document.createElement("script");
+          var timer = setTimeout(function() {
+            try { delete window[cbName]; } catch (_) {}
+            script.remove();
+            reject(new Error("timeout"));
+          }, timeoutMs || 7000);
+          window[cbName] = function(payload) {
+            clearTimeout(timer);
+            try { resolve(payload); } finally {
+              try { delete window[cbName]; } catch (_) {}
+              script.remove();
+            }
+          };
+          script.src = url + (url.indexOf("?") >= 0 ? "&" : "?") + "cb=" + cbName + "&_t=" + Date.now();
+          script.async = true;
+          script.onerror = function() {
+            clearTimeout(timer);
+            try { delete window[cbName]; } catch (_) {}
+            script.remove();
+            reject(new Error("script_error"));
+          };
+          document.body.appendChild(script);
+        });
+      }
+      async function fetchIndexBySecid(item) {
+        var secids = Array.isArray(item.fallbackSecids) ? item.fallbackSecids : [];
+        for (var i = 0; i < secids.length; i += 1) {
+          var url = "https://push2.eastmoney.com/api/qt/stock/get?secid=" + encodeURIComponent(secids[i]) + "&fields=f57,f58,f43,f169,f170";
+          try {
+            var payload = await fetchJsonp(url, 7000);
+            var parsed = parseIndexPayload(item, payload);
+            if (parsed) return parsed;
+          } catch (_) {}
+        }
+        return null;
+      }
+      function fetchIndexBySina(item) {
+        return new Promise(function(resolve) {
+          var script = document.createElement("script");
+          script.src = "https://hq.sinajs.cn/list=" + item.sinaSymbol + "&t=" + Date.now();
+          script.charset = "gbk";
+          script.onload = function() {
+            var raw = window["hq_str_" + item.sinaSymbol];
+            var p = parseSinaIndexRaw(item, raw);
+            script.remove();
+            resolve(p || null);
+          };
+          script.onerror = function() {
+            script.remove();
+            resolve(null);
+          };
+          document.body.appendChild(script);
+        });
+      }
+      function parseTencentIndexRaw(item, raw) {
+        if (!raw || typeof raw !== "string") return null;
+        var content = raw;
+        var q1 = content.indexOf('"');
+        var q2 = content.lastIndexOf('"');
+        if (q1 >= 0 && q2 > q1) content = content.slice(q1 + 1, q2);
+        var arr = content.split("~");
+        if (!arr.length) return null;
+        var name = arr[1] || item.name;
+        var best = null;
+        for (var i = 1; i < arr.length - 2; i += 1) {
+          var p = toNum(arr[i]);
+          var c = toNum(arr[i + 1]);
+          var r = toNum(arr[i + 2]);
+          if (p == null || c == null || r == null) continue;
+          if (p <= 0 || Math.abs(r) > 30) continue;
+          if (Math.abs(c) > Math.max(20000, p * 0.5)) continue;
+          best = { price: p, change: c, pct: r };
+          break;
+        }
+        if (!best) {
+          var p2 = toNum(arr[2]), c2 = toNum(arr[3]), r2 = toNum(arr[4]);
+          if (p2 != null && c2 != null && r2 != null) best = { price: p2, change: c2, pct: r2 };
+        }
+        if (!best) return null;
+        return normalizeIndexWithPrev(item, {
+          price: best.price,
+          change: best.change,
+          pct: best.pct,
+          prevClose: best.price - best.change,
+          name: name
+        });
+      }
+      function fetchIndicesByTencent(items) {
+        return new Promise(function(resolve) {
+          var symbols = items.map(function(i) { return i.tencentSymbol; }).filter(Boolean);
+          if (!symbols.length) { resolve({}); return; }
+          var script = document.createElement("script");
+          script.src = "https://qt.gtimg.cn/q=" + encodeURIComponent(symbols.join(",")) + "&_t=" + Date.now();
+          script.charset = "gbk";
+          script.onload = function() {
+            var map = {};
+            items.forEach(function(item) {
+              if (!item.tencentSymbol) return;
+              var raw = window["v_" + item.tencentSymbol];
+              var parsed = parseTencentIndexRaw(item, raw);
+              if (parsed) map[item.key] = parsed;
+            });
+            script.remove();
+            resolve(map);
+          };
+          script.onerror = function() {
+            script.remove();
+            resolve({});
+          };
+          document.body.appendChild(script);
+        });
+      }
+      function renderIndicesGrid() {
+        var grid = document.getElementById("indicesGrid");
+        if (!grid) return;
+        grid.innerHTML = latestIndices.map(function(i) {
+          var pctNum = i && i.pct != null && !Number.isNaN(Number(i.pct)) ? Number(i.pct) : null;
+          var cls = pctNum > 0 ? "positive" : pctNum < 0 ? "negative" : "flat";
+          var pctTxt = pctNum == null ? "--" : ((pctNum >= 0 ? "+" : "") + formatNum(pctNum, 2) + "%");
+          var chgTxt = i && i.change != null && !Number.isNaN(Number(i.change)) ? ((Number(i.change) >= 0 ? "+" : "") + formatNum(i.change, 2)) : "--";
+          return '<div class="index-item">' +
+            '<div class="index-name">' + escapeHtml((i && i.name) || "--") + '</div>' +
+            '<div class="index-value">' + (i && i.price != null && !Number.isNaN(Number(i.price)) ? formatNum(i.price, 2) : "--") + '</div>' +
+            '<div class="index-rate ' + cls + '">' + pctTxt + " / " + chgTxt + '</div>' +
+          '</div>';
+        }).join("");
+      }
+      async function loadIndices() {
+        latestIndices = [];
+      }
+      function getAiConfig() {
+        try {
+          var cfg = JSON.parse(localStorage.getItem(AI_CONFIG_KEY) || "{}");
+          return {
+            endpoint: normalizeAiEndpoint(cfg.endpoint || "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"),
+            model: cfg.model || "qwen-plus",
+            apiKey: cfg.apiKey || ""
+          };
+        } catch (_) {
+          return { endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", model: "qwen-plus", apiKey: "" };
+        }
+      }
+      function normalizeAiEndpoint(url) {
+        var u = (url || "").trim();
+        if (!u) return "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
+        if (/\/compatible-mode\/v1\/?$/.test(u)) return u.replace(/\/?$/, "/chat/completions");
+        return u;
+      }
+      function setAiStatus(text) {
+        var el = document.getElementById("aiStatus");
+        if (el) el.textContent = text;
+      }
+      function setAiOutput(text) {
+        aiRawOutput = text || "";
+        var el = document.getElementById("aiOutput");
+        if (el) el.innerHTML = renderMarkdownToHtml(aiRawOutput);
+      }
+      function getAiWindowMode() {
+        if (!isTradingDay()) return "";
+        var d = new Date();
+        var m = d.getHours() * 60 + d.getMinutes();
+        if (m >= 11 * 60 + 30 && m <= 11 * 60 + 45) return "midday";
+        if (m >= 14 * 60 + 30 && m <= 15 * 60) return "preclose";
+        return "";
+      }
+      function buildAiPrompt(mode) {
+        var s = latestMarketSnapshot || {};
+        var indexLine = (latestIndices || []).map(function(i) {
+          var rate = i.pct != null && !Number.isNaN(Number(i.pct)) ? ((Number(i.pct) >= 0 ? "+" : "") + Number(i.pct).toFixed(2) + "%") : "--";
+          return (i.alias || i.name || "--") + ":" + rate;
+        }).join(" | ");
+        var funds = (s.funds || []).slice(0, 8).map(function(f) {
+          var todayRateStr = f.todayRate != null && !Number.isNaN(f.todayRate) ? ((f.todayRate >= 0 ? "+" : "") + formatNum(f.todayRate, 2) + "%") : "--";
+          var cumRateStr = f.cumRate != null && !Number.isNaN(f.cumRate) ? ((f.cumRate >= 0 ? "+" : "") + formatNum(f.cumRate, 2) + "%") : "--";
+          return [
+            f.name || f.code,
+            "当日涨跌:" + todayRateStr + " 当日收益:" + formatNum(f.todayProfit, 2),
+            "累计涨跌:" + cumRateStr + " 累计收益:" + formatNum(f.cumProfit, 2),
+            "总成本:" + formatNum(f.cost, 2) + " 总市值:" + formatNum(f.holdValue, 2)
+          ].join(" | ");
+        }).join("\n");
+        var task, timeDesc;
+        if (mode === "preclose") {
+          task = "请重点分析今天涨跌结构，并给出仓位调整建议（含减仓比例建议区间与触发条件）。";
+          timeDesc = "收盘前30分钟";
+        } else if (mode === "realtime") {
+          task = "请基于当前持仓实时数据，给出简要分析结论与操作建议（含仓位调整方向）。";
+          timeDesc = "用户主动触发，实时分析";
+        } else {
+          task = "请给出早盘总结，关注风格切换、板块轮动与下午风险点。";
+          timeDesc = "早盘结束后";
+        }
+        return [
+          "你是A股场外基金组合分析师。注意：持仓均为场外基金，不涉及场内交易。请基于以下信息给出简明、可执行建议。",
+          "输出格式：1) 市场结论 2) 组合风险 3) 操作建议（分点，量化到仓位百分比） 4) 需要警惕的信号。重点内容请用**加粗**标出。",
+          "当前时段：" + timeDesc,
+          "指数：" + indexLine,
+          "组合汇总：当日收益 " + formatNum(s.totalTodayProfit, 2) + "，累计收益 " + formatNum(s.totalCumProfit, 2) + "，累计收益率 " + formatNum(s.totalCumRate, 2) + "%",
+          "持仓明细：\n" + (funds || "暂无"),
+          task
+        ].join("\n");
+      }
+      async function runAiAnalysis(mode, auto) {
+        if (aiRunning) return;
+        var cfg = getAiConfig();
+        if (!cfg.apiKey) {
+          setAiStatus("未配置 AI Key，请先在下方配置。");
+          return;
+        }
+        aiRunning = true;
+        setAiStatus((auto ? "自动" : "手动") + "分析中...");
+        setAiOutput("");
+        try {
+          var payload = {
+            model: cfg.model,
+            temperature: 0.3,
+            stream: true,
+            messages: [
+              { role: "system", content: "请使用中文输出，保持专业、简洁、可执行。请将重点内容使用**加粗**展示。" },
+              { role: "user", content: buildAiPrompt(mode) }
+            ]
+          };
+          var res = await fetch(cfg.endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + cfg.apiKey
+            },
+            body: JSON.stringify(payload)
+          });
+          if (!res.ok) {
+            var errText = "";
+            try { errText = await res.text(); } catch (_) {}
+            throw new Error("HTTP " + res.status + (errText ? " " + errText.slice(0, 180) : ""));
+          }
+          if (!res.body) throw new Error("响应体为空");
+          var reader = res.body.getReader();
+          var decoder = new TextDecoder("utf-8");
+          var buf = "";
+          var full = "";
+          while (true) {
+            var step = await reader.read();
+            if (step.done) break;
+            buf += decoder.decode(step.value, { stream: true });
+            var lines = buf.split("\n");
+            buf = lines.pop() || "";
+            for (var i = 0; i < lines.length; i++) {
+              var line = lines[i].trim();
+              if (!line || line.indexOf("data:") !== 0) continue;
+              var data = line.slice(5).trim();
+              if (!data || data === "[DONE]") continue;
+              try {
+                var j = JSON.parse(data);
+                var delta = (((j || {}).choices || [])[0] || {}).delta;
+                var content = (delta && delta.content) || ((((j || {}).choices || [])[0] || {}).message || {}).content || "";
+                if (content) {
+                  full += content;
+                  setAiOutput(full);
+                }
+              } catch (_) {}
+            }
+          }
+          if (!full) setAiOutput("AI 未返回可读内容，请检查模型配置。");
+          setAiStatus((auto ? "自动" : "手动") + "分析完成：" + new Date().toLocaleTimeString("zh-CN", { hour12: false }));
+        } catch (e) {
+          setAiStatus("AI 分析失败：" + (e && e.message ? e.message : "unknown"));
+        } finally {
+          aiRunning = false;
+        }
+      }
+      function autoRunAiIfNeeded() {
+        if (!aiAutoEnabled) return;
+        var mode = getAiWindowMode();
+        if (!mode) return;
+        var day = new Date().toISOString().slice(0, 10);
+        var key = day + "_" + mode;
+        try {
+          var cache = JSON.parse(localStorage.getItem(AI_TRIGGER_KEY) || "{}");
+          if (cache[key]) return;
+          cache[key] = Date.now();
+          localStorage.setItem(AI_TRIGGER_KEY, JSON.stringify(cache));
+        } catch (_) {}
+        runAiAnalysis(mode, true);
+      }
+      function initAiPanel() {
+        var cfg = getAiConfig();
+        var endpointInput = document.getElementById("aiEndpointInput");
+        var modelInput = document.getElementById("aiModelInput");
+        var keyInput = document.getElementById("aiApiKeyInput");
+        if (endpointInput) endpointInput.value = cfg.endpoint;
+        if (modelInput) modelInput.value = cfg.model;
+        if (keyInput) keyInput.value = cfg.apiKey;
+        aiAutoEnabled = localStorage.getItem(AI_AUTO_KEY) !== "0";
+        var autoBtn = document.getElementById("aiAutoBtn");
+        if (autoBtn) autoBtn.textContent = "自动: " + (aiAutoEnabled ? "开" : "关");
+      }
+      function saveAiConfigFromInputs() {
+        var cfg = {
+          endpoint: normalizeAiEndpoint((document.getElementById("aiEndpointInput").value || "").trim() || "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"),
+          model: (document.getElementById("aiModelInput").value || "").trim() || "qwen-plus",
+          apiKey: (document.getElementById("aiApiKeyInput").value || "").trim()
+        };
+        localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(cfg));
+        document.getElementById("aiEndpointInput").value = cfg.endpoint;
+        setAiStatus("AI 配置已保存。");
+      }
+      async function refreshAll() {
+        await loadAllValuations();
+        autoRunAiIfNeeded();
+      }
+      function formatNum(n, fixed) { if (n == null || Number.isNaN(n)) return "--"; return Number(n).toFixed(fixed != null ? fixed : 2); }
+      function renderRate(value) {
+        if (value == null || value === "" || Number.isNaN(Number(value))) return { text: "--", cls: "" };
+        var v = Number(value);
+        return { text: (v >= 0 ? "+" : "") + formatNum(v, 2) + "%", cls: v > 0 ? "positive" : v < 0 ? "negative" : "" };
+      }
+      function renderMoney(value, showCurrency) {
+        if (value == null || Number.isNaN(value)) return { text: "--", cls: "" };
+        var v = Number(value);
+        var prefix = showCurrency === false ? "" : "¥";
+        return { text: (v >= 0 ? "+" : "") + prefix + formatNum(v, 2), cls: v > 0 ? "positive" : v < 0 ? "negative" : "" };
+      }
+      function escapeHtml(s) { var d = document.createElement("div"); d.textContent = s == null ? "" : s; return d.innerHTML; }
+      function setEditMode(id) {
+        var f = getFundList().find(function(x){ return x.id === id; });
+        if (!f) return;
+        document.getElementById("editId").value = id;
+        document.getElementById("fundCode").value = f.fundCode;
+        document.getElementById("costPrice").value = f.costPrice;
+        document.getElementById("shares").value = f.shares;
+        document.getElementById("btnSubmit").textContent = "保存";
+        document.getElementById("btnCancelEdit").style.display = "inline-block";
+        syncAddButtonState();
+      }
+      function clearEditMode() {
+        document.getElementById("editId").value = "";
+        document.getElementById("fundCode").value = "";
+        document.getElementById("costPrice").value = "";
+        document.getElementById("shares").value = "";
+        document.getElementById("btnSubmit").textContent = "添加";
+        document.getElementById("btnCancelEdit").style.display = "none";
+        syncAddButtonState();
+      }
+      function syncAddButtonState() {
+        var code = (document.getElementById("fundCode").value || "").trim().replace(/\D/g, "");
+        var cost = Number(document.getElementById("costPrice").value);
+        var shares = Number(document.getElementById("shares").value);
+        var ok = code.length === 6 && !Number.isNaN(cost) && cost > 0 && !Number.isNaN(shares) && shares > 0;
+        var btn = document.getElementById("btnSubmit");
+        if (btn) btn.disabled = !ok;
+      }
+      function renderList() {
+        var list = getFundList(), listEl = document.getElementById("fundList"), emptyTip = document.getElementById("emptyTip"), heroSection = document.getElementById("heroSection"), listHead = document.querySelector(".fund-list-head");
+        if (list.length === 0) {
+          listEl.innerHTML = "";
+          emptyTip.style.display = "block";
+          heroSection.style.display = "none";
+          if (listHead) listHead.style.display = "none";
+          latestMarketSnapshot = { date: "", totalCost: 0, totalTodayProfit: 0, totalCumProfit: 0, totalCumRate: 0, funds: [] };
+          autoRunAiIfNeeded();
+          return;
+        }
+        emptyTip.style.display = "none";
+        heroSection.style.display = "grid";
+        if (listHead) listHead.style.display = "grid";
+        listEl.innerHTML = list.map(function(f) {
+          return '<li class="fund-item" data-id="'+f.id+'">' +
+            '<div class="fund-row-wrap">' +
+            '<div class="fund-row-grid">' +
+            '<div class="fund-main-name"><span class="fund-name">'+escapeHtml(f.fundName||"加载中…")+'</span></div>' +
+            '<div class="fund-metric" data-todayprofit>--</div>' +
+            '<div class="fund-metric" data-gsz>--</div>' +
+            '<div class="fund-metric" data-cumprofit>--</div>' +
+            '<div class="fund-actions">' +
+            '<button type="button" class="fund-more-btn" aria-label="更多">⋯</button></div>' +
+            '</div></div>' +
+            '<div class="fund-detail"><table><tbody>' +
+            '<tr><th>昨日净值</th><td data-dwjz>--</td></tr><tr><th>当日涨跌幅</th><td data-todayrate>--</td></tr>' +
+            '<tr><th>持有份额</th><td data-shares>'+formatNum(f.shares,4)+'</td></tr><tr><th>成本价</th><td data-costprice>'+formatNum(f.costPrice,4)+'</td></tr>' +
+            '<tr><th>持有金额</th><td data-holdvalue>--</td></tr><tr><th>持仓占比</th><td data-weight>--</td></tr>' +
+            '<tr><th>净值日期</th><td data-jzrq>--</td></tr><tr><th>估值时间</th><td data-gztime>--</td></tr>' +
+            '</tbody></table><p class="fund-detail-note">趋势图、重仓股等需额外数据接口，后续可接入。</p></div></li>';
+        }).join("");
+        listEl.querySelectorAll(".fund-row-wrap").forEach(function(row) {
+          row.addEventListener("click", function(e) {
+            if (e.target.closest(".fund-actions")) return;
+            var item = row.closest(".fund-item");
+            listEl.querySelectorAll(".fund-item.expanded").forEach(function(other) {
+              if (other !== item) other.classList.remove("expanded");
+            });
+            item.classList.toggle("expanded");
+          });
+        });
+        listEl.querySelectorAll(".fund-more-btn").forEach(function(btn) {
+          btn.addEventListener("click", function(e) {
+            e.stopPropagation();
+            var item = btn.closest(".fund-item");
+            if (!item) return;
+            activeActionFundId = item.dataset.id || "";
+            openActionMenu(btn);
+          });
+        });
+        refreshAll();
+      }
+      function openActionMenu(anchorEl) {
+        var menu = document.getElementById("actionMenu");
+        if (!menu || !anchorEl) return;
+        var rect = anchorEl.getBoundingClientRect();
+        var menuWidth = 112;
+        var left = Math.min(window.innerWidth - menuWidth - 8, Math.max(8, rect.right - menuWidth));
+        var top = Math.min(window.innerHeight - 92, rect.bottom + 6);
+        menu.style.left = left + "px";
+        menu.style.top = top + "px";
+        menu.classList.add("open");
+      }
+      function closeActionMenu() {
+        var menu = document.getElementById("actionMenu");
+        if (menu) menu.classList.remove("open");
+        activeActionFundId = "";
+      }
+      function openAiDrawer() {
+        document.body.classList.add("drawer-open");
+      }
+      function toggleAiDrawer() {
+        document.body.classList.toggle("drawer-open");
+      }
+      function closeAiDrawer() {
+        document.body.classList.remove("drawer-open");
+      }
+      function initAiBubble() {
+        var bubble = document.getElementById("aiBubble");
+        var fab = document.getElementById("aiFabBtn");
+        if (!bubble || !fab) return;
+        var dragging = false;
+        var moved = false;
+        var startY = 0;
+        var startTop = 0;
+
+        function clampTop(v) {
+          var minTop = 12;
+          var maxTop = Math.max(minTop, window.innerHeight - bubble.offsetHeight - 12);
+          return Math.min(maxTop, Math.max(minTop, v));
+        }
+        function applyTop(v) {
+          bubble.style.top = clampTop(v) + "px";
+          bubble.style.right = "calc(10px + env(safe-area-inset-right))";
+          bubble.style.left = "auto";
+        }
+        function saveTop() {
+          var top = bubble.getBoundingClientRect().top;
+          var ratio = top / Math.max(1, window.innerHeight);
+          try { localStorage.setItem(AI_BUBBLE_KEY, String(ratio)); } catch (_) {}
+        }
+        function loadTop() {
+          var ratio = Number(localStorage.getItem(AI_BUBBLE_KEY));
+          if (Number.isNaN(ratio)) return;
+          applyTop(window.innerHeight * ratio);
+        }
+        function onMove(clientY) {
+          if (!dragging) return;
+          var delta = clientY - startY;
+          if (Math.abs(delta) > 3) moved = true;
+          applyTop(startTop + delta);
+        }
+        function onMouseMove(e) { onMove(e.clientY); }
+        function onTouchMove(e) {
+          if (!e.touches || !e.touches[0]) return;
+          onMove(e.touches[0].clientY);
+        }
+        function endDrag() {
+          if (!dragging) return;
+          dragging = false;
+          bubble.style.cursor = "grab";
+          window.removeEventListener("mousemove", onMouseMove);
+          window.removeEventListener("touchmove", onTouchMove);
+          window.removeEventListener("mouseup", endDrag);
+          window.removeEventListener("touchend", endDrag);
+          saveTop();
+          if (moved) setTimeout(function() { moved = false; }, 0);
+        }
+        function startDrag(clientY) {
+          dragging = true;
+          moved = false;
+          startY = clientY;
+          startTop = bubble.getBoundingClientRect().top;
+          bubble.style.cursor = "grabbing";
+          window.addEventListener("mousemove", onMouseMove);
+          window.addEventListener("touchmove", onTouchMove, { passive: true });
+          window.addEventListener("mouseup", endDrag);
+          window.addEventListener("touchend", endDrag);
+        }
+
+        bubble.addEventListener("mousedown", function(e) {
+          if (e.button !== 0) return;
+          startDrag(e.clientY);
+        });
+        bubble.addEventListener("touchstart", function(e) {
+          if (!e.touches || !e.touches[0]) return;
+          startDrag(e.touches[0].clientY);
+        }, { passive: true });
+        fab.addEventListener("click", function(e) {
+          if (moved) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+          }
+        }, true);
+        window.addEventListener("resize", function() {
+          applyTop(bubble.getBoundingClientRect().top);
+        });
+        loadTop();
+      }
+      function updateSortIndicators() {
+        var t = document.getElementById("sortTodayIndicator");
+        var c = document.getElementById("sortCumIndicator");
+        var tb = document.getElementById("sortTodayBtn");
+        var cb = document.getElementById("sortCumBtn");
+        if (t) t.textContent = sortState.field === "today" ? (sortState.order === "asc" ? "↑" : "↓") : "↕";
+        if (c) c.textContent = sortState.field === "cum" ? (sortState.order === "asc" ? "↑" : "↓") : "↕";
+        if (tb) tb.classList.toggle("active", sortState.field === "today");
+        if (cb) cb.classList.toggle("active", sortState.field === "cum");
+      }
+      function applySortToList() {
+        var listEl = document.getElementById("fundList");
+        if (!listEl || !sortState.field || !sortState.order) return;
+        var key = sortState.field === "today" ? "todayProfitVal" : "cumProfitVal";
+        var items = Array.from(listEl.querySelectorAll(".fund-item"));
+        items.sort(function(a, b) {
+          var va = parseFloat(a.dataset[key]);
+          var vb = parseFloat(b.dataset[key]);
+          if (Number.isNaN(va)) va = -Infinity;
+          if (Number.isNaN(vb)) vb = -Infinity;
+          return sortState.order === "asc" ? (va - vb) : (vb - va);
+        });
+        items.forEach(function(item) { listEl.appendChild(item); });
+      }
+      function toggleSort(field) {
+        if (sortState.field !== field) {
+          sortState.field = field;
+          sortState.order = "desc";
+        } else {
+          sortState.order = sortState.order === "desc" ? "asc" : "desc";
+        }
+        updateSortIndicators();
+        applySortToList();
+      }
+      async function loadAllValuations() {
+        var list = getFundList(), marketOpen = isMarketOpen(), trading = isTradingDay();
+        document.getElementById("tradingBadge").textContent = (marketOpen ? "交易中" : trading ? "已收盘/非交易时段" : "非交易日") + " · " + new Date().toLocaleTimeString("zh-CN", { hour12: false });
+        var totalCumProfit = 0, totalCost = 0, totalTodayProfit = 0;
+        var summaryDate = "";
+        var fundSnapshots = [];
+        for (var i = 0; i < list.length; i++) {
+          var f = list[i], itemEl = document.querySelector('.fund-item[data-id="'+f.id+'"]');
+          if (!itemEl) continue;
+          var tds = itemEl.querySelectorAll("[data-todayprofit], [data-gsz], [data-cumprofit]");
+          tds.forEach(function(el){ el.classList.add("loading"); });
+
+          var valuation = await fetchValuation(f.fundCode);
+          var navPair = await fetchLatestTwoNav(f.fundCode);
+
+          tds.forEach(function(el){ el.classList.remove("loading"); });
+          if (valuation || navPair) {
+            var latestNav = navPair && navPair.latest ? navPair.latest : null;
+            var prevNav = navPair && navPair.previous ? navPair.previous : null;
+            var valNav = (valuation && valuation.jzrq && !Number.isNaN(Number(valuation.dwjz))) ? { date: String(valuation.jzrq).slice(0, 10), value: Number(valuation.dwjz) } : null;
+            var latestPublished = latestNav;
+            if (!latestPublished && valNav) latestPublished = valNav;
+            if (latestPublished && valNav && compareYmd(valNav.date, latestPublished.date) > 0) latestPublished = valNav;
+
+            var dwjz = latestPublished ? latestPublished.value : (valuation && !Number.isNaN(Number(valuation.dwjz)) ? Number(valuation.dwjz) : null);
+            var gsz = valuation && !Number.isNaN(Number(valuation.gsz)) ? Number(valuation.gsz) : null;
+
+            var currentPrice = null;
+            var currentLabel = "净值";
+            var dataDate = "";
+            var todayBase = null;
+
+            if (marketOpen) {
+              currentPrice = gsz != null ? gsz : dwjz;
+              currentLabel = gsz != null ? "估值" : "净值";
+              dataDate = valuation && valuation.gztime ? String(valuation.gztime).slice(0, 10) : (latestPublished ? latestPublished.date : "");
+              todayBase = latestPublished ? latestPublished.value : dwjz;
+            } else {
+              currentPrice = latestPublished ? latestPublished.value : dwjz;
+              currentLabel = "净值";
+              dataDate = latestPublished ? latestPublished.date : (valuation && valuation.jzrq ? valuation.jzrq : "");
+              todayBase = prevNav ? prevNav.value : null;
+            }
+
+            var todayRate = (todayBase != null && todayBase > 0 && currentPrice != null) ? ((currentPrice - todayBase) / todayBase) * 100 : null;
+            var todayProfit = (todayBase != null && currentPrice != null) ? (currentPrice - todayBase) * f.shares : null;
+            var cumProfit = currentPrice != null ? (currentPrice - f.costPrice) * f.shares : null;
+            var cumRate = (currentPrice != null && f.costPrice > 0) ? ((currentPrice - f.costPrice) / f.costPrice) * 100 : null;
+            var holdValue = currentPrice != null ? currentPrice * f.shares : null;
+
+            if (cumProfit != null) totalCumProfit += cumProfit;
+            totalCost += f.costPrice * f.shares;
+            if (todayProfit != null) totalTodayProfit += todayProfit;
+
+            var dateStr = formatDateDisplay(dataDate);
+            if (dataDate && compareYmd(dataDate, summaryDate) > 0) summaryDate = dataDate;
+            var tp = renderMoney(todayProfit, false);
+            var tr = renderRate(todayRate);
+            itemEl.querySelector("[data-todayprofit]").innerHTML =
+              '<div class="main '+tp.cls+'">'+tp.text+'</div>' +
+              '<div class="sub '+tr.cls+'">'+tr.text+'</div>' +
+              (dateStr ? '<span class="cell-date">'+dateStr+'</span>' : '');
+            itemEl.querySelector("[data-gsz]").innerHTML =
+              '<div class="main">'+(currentPrice != null ? formatNum(currentPrice,4) : "--")+'</div>' +
+              '<div class="sub">('+currentLabel+')</div>' +
+              (dateStr ? '<span class="cell-date">'+dateStr+'</span>' : '');
+            var cp = renderMoney(cumProfit, false), cr = renderRate(cumRate);
+            itemEl.querySelector("[data-cumprofit]").innerHTML =
+              '<div class="main '+cp.cls+'">'+cp.text+'</div>' +
+              '<div class="sub '+cr.cls+'">'+cr.text+'</div>' +
+              (dateStr ? '<span class="cell-date">'+dateStr+'</span>' : '');
+            itemEl.dataset.todayProfitVal = todayProfit != null ? String(todayProfit) : "";
+            itemEl.dataset.cumProfitVal = cumProfit != null ? String(cumProfit) : "";
+
+            var showYesterday = marketOpen ? (latestPublished ? latestPublished.value : dwjz) : (prevNav ? prevNav.value : null);
+            itemEl.querySelector("[data-dwjz]").textContent = showYesterday != null ? formatNum(showYesterday, 4) : "--";
+            itemEl.querySelector("[data-todayrate]").innerHTML = '<span class="'+tr.cls+'">'+tr.text+'</span>';
+            itemEl.querySelector("[data-holdvalue]").textContent = holdValue != null ? formatNum(holdValue, 2) : "--";
+
+            var nameEl = itemEl.querySelector(".fund-name");
+            if (nameEl && valuation && valuation.name) {
+              var nameStr = String(valuation.name).trim();
+              var nameCell = nameEl.closest(".fund-main-name");
+              if (nameCell) nameCell.innerHTML = '<span class="fund-name">' + escapeHtml(nameStr) + '</span>';
+            }
+            itemEl.querySelector("[data-jzrq]").textContent = latestPublished ? latestPublished.date : (valuation && valuation.jzrq ? valuation.jzrq : "--");
+            itemEl.querySelector("[data-gztime]").textContent = valuation && valuation.gztime ? valuation.gztime : "--";
+            var cost = f.costPrice * f.shares;
+            fundSnapshots.push({
+              code: f.fundCode,
+              name: valuation && valuation.name ? valuation.name : f.fundName || f.fundCode,
+              todayProfit: todayProfit || 0,
+              todayRate: todayRate || 0,
+              cumProfit: cumProfit || 0,
+              cumRate: cumRate || 0,
+              cost: cost,
+              holdValue: holdValue || 0
+            });
+          } else {
+            itemEl.querySelector("[data-todayprofit]").innerHTML = '<span class="error">--</span>';
+            itemEl.querySelector("[data-gsz]").textContent = "--";
+            itemEl.querySelector("[data-cumprofit]").textContent = "--";
+            itemEl.dataset.todayProfitVal = "";
+            itemEl.dataset.cumProfitVal = "";
+            fundSnapshots.push({
+              code: f.fundCode,
+              name: f.fundName || f.fundCode,
+              todayProfit: 0,
+              todayRate: 0,
+              cumProfit: 0,
+              cumRate: 0,
+              cost: f.costPrice * f.shares,
+              holdValue: 0
+            });
+          }
+        }
+
+        var totalCostSum = totalCost, totalHoldValue = totalCostSum + totalCumProfit;
+        list.forEach(function(f) {
+          var itemEl = document.querySelector('.fund-item[data-id="'+f.id+'"]');
+          if (!itemEl) return;
+          var raw = (itemEl.querySelector("[data-holdvalue]") || {}).textContent || "";
+          var holdVal = parseFloat(raw.replace(/[¥,\s]/g, ""));
+          var weight = (totalHoldValue > 0 && !Number.isNaN(holdVal)) ? (holdVal / totalHoldValue) * 100 : 0;
+          itemEl.querySelector("[data-weight]").textContent = formatNum(weight, 1) + "%";
+        });
+
+        var totalAsset = totalCostSum + totalCumProfit;
+        var assetR = renderMoney(totalAsset, false);
+        document.getElementById("heroAsset").textContent = assetR.text === "--" ? "--" : assetR.text.replace(/^\+/, "");
+        document.getElementById("heroAsset").className = "hero-value " + assetR.cls;
+        var todayPR = renderMoney(totalTodayProfit, false);
+        document.getElementById("heroTodayProfit").textContent = todayPR.text === "--" ? "--" : todayPR.text;
+        document.getElementById("heroTodayProfit").className = "hero-value " + todayPR.cls;
+        var todayRR = renderRate(totalCostSum > 0 ? (totalTodayProfit / totalCostSum) * 100 : null);
+        document.getElementById("heroTodayRate").textContent = todayRR.text;
+        document.getElementById("heroTodayRate").className = "hero-sub " + todayRR.cls;
+        var dateLabel = summaryDate ? formatDateDisplay(summaryDate) : formatDateDisplay(new Date().toISOString().slice(0, 10));
+        document.getElementById("heroTodayLabel").textContent = (dateLabel || "--") + " 当日收益";
+
+        var r = renderMoney(totalCumProfit, false);
+        document.getElementById("heroProfit").textContent = r.text === "--" ? "--" : r.text;
+        document.getElementById("heroProfit").className = "hero-value " + r.cls;
+        var rateR = renderRate(totalCostSum > 0 ? (totalCumProfit / totalCostSum) * 100 : null);
+        document.getElementById("heroRate").textContent = rateR.text;
+        document.getElementById("heroRate").className = "hero-sub " + rateR.cls;
+        latestMarketSnapshot = {
+          date: summaryDate,
+          totalCost: totalCostSum,
+          totalTodayProfit: totalTodayProfit,
+          totalCumProfit: totalCumProfit,
+          totalCumRate: totalCostSum > 0 ? (totalCumProfit / totalCostSum) * 100 : 0,
+          funds: fundSnapshots.sort(function(a, b) { return Math.abs(b.todayProfit) - Math.abs(a.todayProfit); })
+        };
+        applySortToList();
+      }
+      document.getElementById("addForm").addEventListener("submit", function(e) {
+        e.preventDefault();
+        var editId = document.getElementById("editId").value.trim(), code = document.getElementById("fundCode").value.trim().replace(/\D/g,"").padStart(6,"0").slice(-6);
+        var costPrice = document.getElementById("costPrice").value, shares = document.getElementById("shares").value;
+        var costNum = Number(costPrice), shareNum = Number(shares);
+        if (code.length !== 6) { alert("请输入6位基金代码"); return; }
+        if (!costPrice || Number.isNaN(costNum) || costNum <= 0) { alert("请输入有效的成本价（>0）"); return; }
+        if (!shares || Number.isNaN(shareNum) || shareNum <= 0) { alert("请输入有效的持有份额（>0）"); return; }
+        if (editId) {
+          if (updateFund(editId, code, costNum, shareNum)) { clearEditMode(); renderList(); } else alert("保存失败");
+        } else {
+          if (addFund(code, costNum, shareNum)) { document.getElementById("fundCode").value = ""; document.getElementById("costPrice").value = ""; document.getElementById("shares").value = ""; renderList(); }
+        }
+      });
+      ["fundCode", "costPrice", "shares"].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener("input", syncAddButtonState);
+      });
+      document.getElementById("btnCancelEdit").addEventListener("click", clearEditMode);
+      document.getElementById("refreshBtn").addEventListener("click", function() {
+        var btn = document.getElementById("refreshBtn");
+        if (btn) {
+          btn.classList.remove("spinning");
+          void btn.offsetWidth;
+          btn.classList.add("spinning");
+        }
+        refreshAll();
+      });
+      document.getElementById("themeToggleBtn").addEventListener("click", toggleTheme);
+      document.getElementById("sortTodayBtn").addEventListener("click", function(e) { e.stopPropagation(); toggleSort("today"); });
+      document.getElementById("sortCumBtn").addEventListener("click", function(e) { e.stopPropagation(); toggleSort("cum"); });
+      document.getElementById("aiSaveConfigBtn").addEventListener("click", saveAiConfigFromInputs);
+      document.getElementById("aiAnalyzeBtn").addEventListener("click", async function() {
+        await loadAllValuations();
+        runAiAnalysis("realtime", false);
+      });
+      document.getElementById("aiFabBtn").addEventListener("click", function(e) {
+        e.stopPropagation();
+        toggleAiDrawer();
+      });
+      document.getElementById("aiCloseBtn").addEventListener("click", closeAiDrawer);
+      document.getElementById("aiAutoBtn").addEventListener("click", function() {
+        aiAutoEnabled = !aiAutoEnabled;
+        localStorage.setItem(AI_AUTO_KEY, aiAutoEnabled ? "1" : "0");
+        document.getElementById("aiAutoBtn").textContent = "自动: " + (aiAutoEnabled ? "开" : "关");
+      });
+      document.getElementById("menuEditBtn").addEventListener("click", function(e) {
+        e.stopPropagation();
+        if (!activeActionFundId) return;
+        setEditMode(activeActionFundId);
+        closeActionMenu();
+      });
+      document.getElementById("menuDeleteBtn").addEventListener("click", function(e) {
+        e.stopPropagation();
+        if (!activeActionFundId) return;
+        if (confirm("确定删除该条记录？")) {
+          removeFund(activeActionFundId);
+          closeActionMenu();
+          renderList();
+          refreshAll();
+        }
+      });
+      document.addEventListener("click", function(e) {
+        var menu = document.getElementById("actionMenu");
+        if (!menu) return;
+        if (menu.classList.contains("open") && !menu.contains(e.target) && !e.target.closest(".fund-more-btn")) {
+          closeActionMenu();
+        }
+        var drawer = document.getElementById("aiDrawer");
+        var bubble = document.getElementById("aiBubble");
+        if (document.body.classList.contains("drawer-open") && drawer && !drawer.contains(e.target) && (!bubble || !bubble.contains(e.target)) && !e.target.closest(".page-head") && !e.target.closest(".main-wrapper") && !e.target.closest(".action-menu")) {
+          closeAiDrawer();
+        }
+      });
+      window.addEventListener("resize", closeActionMenu);
+      window.addEventListener("scroll", closeActionMenu, true);
+      updateSortIndicators();
+      initTheme();
+      initAiPanel();
+      initAiBubble();
+      syncAddButtonState();
+      renderList();
+    })();
+  </script>
+</body>
+</html>
