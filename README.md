@@ -1,6 +1,6 @@
 # 实时基金估值与智能决策系统（纯前端）
 
-一个面向个人投资者的纯前端基金看板：管理场外基金持仓、查看实时估值与收益，并结合 AI 给出盘中/收盘前决策建议。
+一个面向个人投资者的纯前端基金看板：管理场外基金持仓、查看实时估值与收益，并结合AI给出盘中/收盘前决策建议。
 
 > 设计原则：无登录、无后端、数据本地保存、开箱即用。
 
@@ -45,7 +45,7 @@
 ## 项目结构
 
 ```text
-finance_project/
+Fund-Valuation-Viewing/
 ├── index.html
 └── README.md
 ```
@@ -54,11 +54,11 @@ finance_project/
 
 ## 快速开始
 
-### 方式一：直接打开
+### 方式一：下载代码后直接打开
 
 双击 `index.html` 用浏览器打开即可。
 
-### 方式二：本地静态服务（推荐）
+### 方式二：下载代码后使用本地静态服务（推荐）
 
 ```bash
 python3 -m http.server 8080
@@ -66,6 +66,9 @@ python3 -m http.server 8080
 
 访问 [http://localhost:8080/index.html](http://localhost:8080/index.html)。
 
+### 方式三：网页端直接打开链接
+
+访问 [https://haohaozhang905-code.github.io/Fund-Valuation-Viewing/)。
 
 
 ## 数据来源
