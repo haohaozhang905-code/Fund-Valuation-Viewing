@@ -64,11 +64,11 @@ Fund-Valuation-Viewing/
 python3 -m http.server 8080
 ```
 
-访问 [http://localhost:8080/index.html](http://localhost:8080/index.html)。
+访问 http://localhost:8080/index.html](http://localhost:8080/index.html。
 
 ### 方式三：网页端直接打开链接
 
-访问 [https://haohaozhang905-code.github.io/Fund-Valuation-Viewing/)。
+访问 https://haohaozhang905-code.github.io/Fund-Valuation-Viewing/。
 
 
 ## 数据来源
