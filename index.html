@@ -625,7 +625,7 @@
       <div class="ai-status" id="aiStatus">待分析：收盘前30分钟会自动分析，早盘结束后会自动总结。</div>
       <div id="aiOutput" class="ai-output">这里会显示 AI 对当前市场与持仓的分析建议。</div>
       <details class="ai-settings">
-        <summary>AI 配置（OpenAI 兼容接口）</summary>
+        <summary>AI 配置</summary>
         <div class="ai-form">
           <div>
             <label>模型名</label>
@@ -1117,7 +1117,22 @@
         if (aiRunning) return;
         var cfg = getAiConfig();
         if (!cfg.apiKey) {
-          setAiStatus("未配置 AI Key，请先在下方配置。");
+          aiRunning = true;
+          setAiStatus((auto ? "自动" : "手动") + "分析中...");
+          setAiOutput("");
+          var msg = "当前暂未配置API Key，请前往阿里云百炼大模型平台（https://www.aliyun.com/product/bailian ）申请Qwen 3.5模型的API Key后重试~";
+          var idx = 0;
+          function streamNext() {
+            if (idx >= msg.length) {
+              setAiStatus("未配置 API Key");
+              aiRunning = false;
+              return;
+            }
+            idx += 1;
+            setAiOutput(msg.slice(0, idx));
+            setTimeout(streamNext, 28);
+          }
+          streamNext();
           return;
         }
         aiRunning = true;
@@ -1694,6 +1709,9 @@
       initAiPanel();
       initAiBubble();
       syncAddButtonState();
+      if (getFundList().length === 0) {
+        addFund("013841", 1.6153, 4975.88);
+      }
       renderList();
     })();
   </script>
