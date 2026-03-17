@@ -701,6 +701,18 @@
         if (t >= 13*60+0 && t < 15*60+0) return true;
         return false;
       }
+      function marketBeforeOpenToday() {
+        if (!isTradingDay()) return false;
+        const d = new Date();
+        const t = d.getHours() * 60 + d.getMinutes();
+        return t < 9 * 60 + 30;
+      }
+      function marketAfterCloseToday() {
+        if (!isTradingDay()) return false;
+        const d = new Date();
+        const t = d.getHours() * 60 + d.getMinutes();
+        return t >= 15 * 60 || (t >= 11 * 60 + 30 && t < 13 * 60);
+      }
       function isNavDateToday(jzrq) {
         if (!jzrq || typeof jzrq !== "string") return false;
         const d = new Date();
@@ -1474,6 +1486,7 @@
       }
       async function loadAllValuations() {
         var list = getFundList(), marketOpen = isMarketOpen(), trading = isTradingDay();
+        var beforeMarket = marketBeforeOpenToday(), afterMarket = marketAfterCloseToday();
         document.getElementById("tradingBadge").textContent = (marketOpen ? "交易中" : trading ? "已收盘/非交易时段" : "非交易日") + " · " + new Date().toLocaleTimeString("zh-CN", { hour12: false });
         var totalCumProfit = 0, totalCost = 0, totalTodayProfit = 0;
         var summaryDate = "";
@@ -1504,16 +1517,55 @@
             var dataDate = "";
             var todayBase = null;
 
+            var todayYMD = new Date().getFullYear() + "-" + String(new Date().getMonth() + 1).padStart(2, "0") + "-" + String(new Date().getDate()).padStart(2, "0");
+            var latestIsToday = latestPublished && latestPublished.date && latestPublished.date.slice(0, 10) === todayYMD;
+            var gztimeDate = valuation && valuation.gztime ? String(valuation.gztime).trim().slice(0, 10) : "";
+            var valuationHasTodayGz = trading && !marketOpen && gsz != null && gztimeDate.length === 10 && isNavDateToday(gztimeDate);
+
             if (marketOpen) {
               currentPrice = gsz != null ? gsz : dwjz;
               currentLabel = gsz != null ? "估值" : "净值";
               dataDate = valuation && valuation.gztime ? String(valuation.gztime).slice(0, 10) : (latestPublished ? latestPublished.date : "");
               todayBase = latestPublished ? latestPublished.value : dwjz;
-            } else {
+            } else if (beforeMarket || !trading) {
               currentPrice = latestPublished ? latestPublished.value : dwjz;
               currentLabel = "净值";
-              dataDate = latestPublished ? latestPublished.date : (valuation && valuation.jzrq ? valuation.jzrq : "");
-              todayBase = prevNav ? prevNav.value : null;
+              dataDate = latestPublished ? latestPublished.date : (valuation && valuation.jzrq ? String(valuation.jzrq).slice(0, 10) : "");
+              todayBase = currentPrice;
+            } else if (afterMarket) {
+              if (latestIsToday) {
+                currentPrice = latestPublished ? latestPublished.value : dwjz;
+                currentLabel = "净值";
+                dataDate = latestPublished ? latestPublished.date : (valuation && valuation.jzrq ? String(valuation.jzrq).slice(0, 10) : "");
+                todayBase = prevNav ? prevNav.value : null;
+              } else if (valuationHasTodayGz) {
+                currentPrice = gsz;
+                currentLabel = "估值";
+                dataDate = gztimeDate;
+                todayBase = latestPublished ? latestPublished.value : (prevNav ? prevNav.value : dwjz);
+              } else {
+                currentPrice = latestPublished ? latestPublished.value : dwjz;
+                currentLabel = "净值";
+                dataDate = latestPublished ? latestPublished.date : (valuation && valuation.jzrq ? String(valuation.jzrq).slice(0, 10) : "");
+                todayBase = prevNav ? prevNav.value : null;
+              }
+            } else {
+              if (latestIsToday) {
+                currentPrice = latestPublished ? latestPublished.value : dwjz;
+                currentLabel = "净值";
+                dataDate = latestPublished ? latestPublished.date : (valuation && valuation.jzrq ? String(valuation.jzrq).slice(0, 10) : "");
+                todayBase = prevNav ? prevNav.value : null;
+              } else if (valuationHasTodayGz) {
+                currentPrice = gsz;
+                currentLabel = "估值";
+                dataDate = gztimeDate;
+                todayBase = latestPublished ? latestPublished.value : (prevNav ? prevNav.value : dwjz);
+              } else {
+                currentPrice = latestPublished ? latestPublished.value : dwjz;
+                currentLabel = "净值";
+                dataDate = latestPublished ? latestPublished.date : (valuation && valuation.jzrq ? String(valuation.jzrq).slice(0, 10) : "");
+                todayBase = prevNav ? prevNav.value : null;
+              }
             }
 
             var todayRate = (todayBase != null && todayBase > 0 && currentPrice != null) ? ((currentPrice - todayBase) / todayBase) * 100 : null;
@@ -1546,7 +1598,7 @@
             itemEl.dataset.todayProfitVal = todayProfit != null ? String(todayProfit) : "";
             itemEl.dataset.cumProfitVal = cumProfit != null ? String(cumProfit) : "";
 
-            var showYesterday = marketOpen ? (latestPublished ? latestPublished.value : dwjz) : (prevNav ? prevNav.value : null);
+            var showYesterday = (marketOpen || valuationHasTodayGz) ? (latestPublished ? latestPublished.value : dwjz) : (prevNav ? prevNav.value : null);
             itemEl.querySelector("[data-dwjz]").textContent = showYesterday != null ? formatNum(showYesterday, 4) : "--";
             itemEl.querySelector("[data-todayrate]").innerHTML = '<span class="'+tr.cls+'">'+tr.text+'</span>';
             itemEl.querySelector("[data-holdvalue]").textContent = holdValue != null ? formatNum(holdValue, 2) : "--";
@@ -1557,7 +1609,7 @@
               var nameCell = nameEl.closest(".fund-main-name");
               if (nameCell) nameCell.innerHTML = '<span class="fund-name">' + escapeHtml(nameStr) + '</span>';
             }
-            itemEl.querySelector("[data-jzrq]").textContent = latestPublished ? latestPublished.date : (valuation && valuation.jzrq ? valuation.jzrq : "--");
+            itemEl.querySelector("[data-jzrq]").textContent = (valuationHasTodayGz && gztimeDate) ? gztimeDate : (latestPublished ? latestPublished.date : (valuation && valuation.jzrq ? valuation.jzrq : "--"));
             itemEl.querySelector("[data-gztime]").textContent = valuation && valuation.gztime ? valuation.gztime : "--";
             var cost = f.costPrice * f.shares;
             fundSnapshots.push({
